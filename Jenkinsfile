@@ -1,13 +1,17 @@
 pipeline {
     agent any
     environment {
-        JBOSS_USERNAME = 'admin'
-        JBOSS_PASSWORD = credentials('jboss-password') // Jenkins credentials ID
         WAR_FILE = '/var/lib/jenkins/workspace/u-buntu/helloworld.war'
         JBOSS_URL = 'http://jboss.sandbox163.opentlc.com:9990/management'
         WAR_FILE_NAME = 'helloworld.war'
     }
     stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Copy WAR to Workspace') {
             steps {
                 echo 'Copying WAR file to workspace...'
@@ -22,37 +26,39 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Deploy WAR to JBoss') {
             steps {
                 echo 'Deploying WAR file to JBoss...'
-                script {
-                    def curlCommand = """
-                        curl --digest -u ${env.JBOSS_USERNAME}:${env.JBOSS_PASSWORD} \\
-                             -X POST \\
-                             -H "Content-Type: application/json" \\
-                             -d '{
-                                   "operation": "composite",
-                                   "address": [],
-                                   "steps": [
-                                       {
-                                           "operation": "add",
-                                           "address": [{"deployment": "${env.WAR_FILE_NAME}"}],
-                                           "content": [
-                                               {"archive": "${env.WAR_FILE}"}
-                                           ],
-                                           "enabled": true
-                                       },
-                                       {
-                                           "operation": "deploy",
-                                           "address": [{"deployment": "${env.WAR_FILE_NAME}"}]
-                                       }
-                                   ]
-                                 }' \\
-                             ${env.JBOSS_URL}
-                    """
-                    echo "Executing curl command: ${curlCommand}"
-                    sh curlCommand
+                withCredentials([usernamePassword(credentialsId: 'jboss-password', passwordVariable: 'JBOSS_PASSWORD', usernameVariable: 'JBOSS_USERNAME')]) {
+                    script {
+                        def curlCommand = """
+                            curl --digest -u ${env.JBOSS_USERNAME}:${env.JBOSS_PASSWORD} \\
+                                 -X POST \\
+                                 -H "Content-Type: application/json" \\
+                                 -d '{
+                                       "operation": "composite",
+                                       "address": [],
+                                       "steps": [
+                                           {
+                                               "operation": "add",
+                                               "address": [{"deployment": "${env.WAR_FILE_NAME}"}],
+                                               "content": [
+                                                   {"archive": "${env.WAR_FILE}"}
+                                               ],
+                                               "enabled": true
+                                           },
+                                           {
+                                               "operation": "deploy",
+                                               "address": [{"deployment": "${env.WAR_FILE_NAME}"}]
+                                           }
+                                       ]
+                                     }' \\
+                                 ${env.JBOSS_URL}
+                        """
+                        echo "Executing curl command: ${curlCommand}"
+                        sh curlCommand
+                    }
                 }
             }
         }
