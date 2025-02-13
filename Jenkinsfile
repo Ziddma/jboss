@@ -9,19 +9,22 @@ node {
             sh 'cp /home/ubuntu/helloworld.war "${WORKSPACE}/${warFileName}"'
         }
 
+        stage('Verify WAR File') {
+            echo "WAR file path: ${WORKSPACE}/${warFileName}"
+            echo "Checking if WAR file exists"
+            sh "ls -l ${WORKSPACE}"
+            if (!fileExists("${WORKSPACE}/${warFileName}")) {
+                error "WAR file not found at: ${WORKSPACE}/${warFileName}"
+            }
+        }
+
         stage('Deploy WAR to JBoss') {
             withCredentials([usernamePassword(credentialsId: 'jboss-credentials', usernameVariable: 'JBOSS_USERNAME', passwordVariable: 'JBOSS_PASSWORD')]) {
                 echo "Deploying WAR file to JBoss"
                 
-                // Memastikan path yang benar untuk WAR
                 def warFilePath = "${WORKSPACE}/${warFileName}"
 
-                // Pastikan file ada sebelum melakukan deploy
-                if (!fileExists(warFilePath)) {
-                    error "WAR file not found at: ${warFilePath}"
-                }
-
-                // Jalankan curl untuk deploy (ubah PUT menjadi POST)
+                // Deploy using curl
                 sh """
                     curl --digest -u ${JBOSS_USERNAME}:${JBOSS_PASSWORD} \
                          -X POST \
@@ -34,7 +37,7 @@ node {
                                        "operation": "add",
                                        "address": [{"deployment": "${warFileName}"}],
                                        "content": [
-                                           {"path": "${warFilePath}"}
+                                           {"archive": "${warFilePath}"}
                                        ],
                                        "enabled": true
                                    },
