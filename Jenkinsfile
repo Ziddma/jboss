@@ -1,66 +1,62 @@
-pipeline {
-    agent any
-    environment {
-        WAR_FILE = '/var/lib/jenkins/workspace/u-buntu/helloworld.war'
-        JBOSS_URL = 'http://jboss.sandbox163.opentlc.com:9990/management'
-        WAR_FILE_NAME = 'helloworld.war'
-    }
-    stages {
+node {
+    def WAR_FILE = '/var/lib/jenkins/workspace/u-buntu/helloworld.war'
+    def JBOSS_URL = 'http://jboss.sandbox163.opentlc.com:9990/management'
+    def WAR_FILE_NAME = 'helloworld.war'
+
+    try {
+        // Checkout SCM
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            echo 'Checking out the repository...'
+            checkout scm
         }
 
+        // Copy WAR to Workspace
         stage('Copy WAR to Workspace') {
-            steps {
-                echo 'Copying WAR file to workspace...'
-                script {
-                    if (fileExists('/home/ubuntu/helloworld.war')) {
-                        echo 'WAR file exists at /home/ubuntu/helloworld.war. Copying to workspace.'
-                        sh "cp /home/ubuntu/helloworld.war ${env.WAR_FILE}"
-                        echo "WAR file successfully copied to workspace: ${env.WAR_FILE}"
-                    } else {
-                        error "WAR file does not exist at /home/ubuntu/helloworld.war"
-                    }
-                }
+            echo 'Copying WAR file to workspace...'
+            if (fileExists('/home/ubuntu/helloworld.war')) {
+                echo 'WAR file exists at /home/ubuntu/helloworld.war. Copying to workspace.'
+                sh "cp /home/ubuntu/helloworld.war ${WAR_FILE}"
+                echo "WAR file successfully copied to workspace: ${WAR_FILE}"
+            } else {
+                error "WAR file does not exist at /home/ubuntu/helloworld.war"
             }
         }
 
+        // Deploy WAR to JBoss
         stage('Deploy WAR to JBoss') {
-            steps {
-                echo 'Deploying WAR file to JBoss...'
-                withCredentials([usernamePassword(credentialsId: 'jboss-password', passwordVariable: 'JBOSS_PASSWORD', usernameVariable: 'JBOSS_USERNAME')]) {
-                    script {
-                        def curlCommand = """
-                            curl --digest -u ${env.JBOSS_USERNAME}:${env.JBOSS_PASSWORD} \\
-                                 -X POST \\
-                                 -H "Content-Type: application/json" \\
-                                 -d '{
-                                       "operation": "composite",
-                                       "address": [],
-                                       "steps": [
-                                           {
-                                               "operation": "add",
-                                               "address": [{"deployment": "${env.WAR_FILE_NAME}"}],
-                                               "content": [
-                                                   {"archive": "${env.WAR_FILE}"}
-                                               ],
-                                               "enabled": true
-                                           },
-                                           {
-                                               "operation": "deploy",
-                                               "address": [{"deployment": "${env.WAR_FILE_NAME}"}]
-                                           }
-                                       ]
-                                     }' \\
-                                 ${env.JBOSS_URL}
-                        """
-                        echo "Executing curl command: ${curlCommand}"
-                        sh curlCommand
-                    }
-                }
+            echo 'Deploying WAR file to JBoss...'
+            withCredentials([usernamePassword(credentialsId: 'jboss-password', passwordVariable: 'JBOSS_PASSWORD', usernameVariable: 'JBOSS_USERNAME')]) {
+                def curlCommand = """
+                    curl --digest -u ${JBOSS_USERNAME}:${JBOSS_PASSWORD} \\
+                         -X POST \\
+                         -H "Content-Type: application/json" \\
+                         -d '{
+                               "operation": "composite",
+                               "address": [],
+                               "steps": [
+                                   {
+                                       "operation": "add",
+                                       "address": [{"deployment": "${WAR_FILE_NAME}"}],
+                                       "content": [
+                                           {"archive": "${WAR_FILE}"}
+                                       ],
+                                       "enabled": true
+                                   },
+                                   {
+                                       "operation": "deploy",
+                                       "address": [{"deployment": "${WAR_FILE_NAME}"}]
+                                   }
+                               ]
+                             }' \\
+                         ${JBOSS_URL}
+                """
+                echo "Executing curl command: ${curlCommand}"
+                sh curlCommand
             }
         }
+
+    } catch (Exception e) {
+        currentBuild.result = 'FAILURE'
+        throw e
     }
 }
