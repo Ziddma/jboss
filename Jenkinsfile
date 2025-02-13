@@ -14,13 +14,13 @@ node {
             echo "Deploying WAR file to JBoss..."
             withCredentials([usernamePassword(credentialsId: 'jboss-credentials', usernameVariable: 'JBOSS_USERNAME', passwordVariable: 'JBOSS_PASSWORD')]) {
                 sh """
-                    curl --digest -u ${JBOSS_USERNAME}:${JBOSS_PASSWORD} \
+                    curl --digest -u ${env.JBOSS_USERNAME}:${env.JBOSS_PASSWORD} \
                          -X POST \
                          -H "Content-Type: application/json" \
                          -d '{
                                "operation": "add",
                                "address": [{"deployment": "${warFileName}"}],
-                               "content": [{"input-stream": "@/var/lib/jenkins/workspace/${warFileName}"}],
+                               "content": [{"input-stream": "@${WORKSPACE}/${warFileName}"}],
                                "enabled": true
                              }' \
                          ${jbossUrl}
@@ -31,16 +31,18 @@ node {
         // Stage: Deploy WAR to JBoss (Activate)
         stage('Deploy WAR to JBoss (Activate)') {
             echo "Activating WAR deployment on JBoss..."
-            sh """
-                curl --digest -u ${JBOSS_USERNAME}:${JBOSS_PASSWORD} \
-                     -X POST \
-                     -H "Content-Type: application/json" \
-                     -d '{
-                           "operation": "deploy",
-                           "address": [{"deployment": "${warFileName}"}]
-                         }' \
-                     ${jbossUrl}
-            """
+            withCredentials([usernamePassword(credentialsId: 'jboss-credentials', usernameVariable: 'JBOSS_USERNAME', passwordVariable: 'JBOSS_PASSWORD')]) {
+                sh """
+                    curl --digest -u ${env.JBOSS_USERNAME}:${env.JBOSS_PASSWORD} \
+                         -X POST \
+                         -H "Content-Type: application/json" \
+                         -d '{
+                               "operation": "deploy",
+                               "address": [{"deployment": "${warFileName}"}]
+                             }' \
+                         ${jbossUrl}
+                """
+            }
         }
 
     } catch (Exception e) {
