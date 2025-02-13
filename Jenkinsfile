@@ -1,6 +1,6 @@
 node {
     def warFileName = "helloworld.war"  // The name of the WAR file
-    def jbossUrl = "http://jboss.sandbox163.opentlc.com:9993/management"  // JBoss management URL
+    def jbossUrl = "http://jboss.sandbox163.opentlc.com:9990/management"  // JBoss management URL
 
     try {
         // Stage: Copy WAR to Workspace
