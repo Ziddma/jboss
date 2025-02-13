@@ -1,37 +1,33 @@
 node {
-    def warFileName = "helloworld.war"  // The name of the WAR file
-    def jbossUrl = "http://jboss.sandbox163.opentlc.com:9990/management"  // JBoss management URL
-    def warFilePath = "/home/ubuntu/${warFileName}"  // Path to the WAR file
+    def warFileName = "helloworld.war"
+    def jbossDeployPath = "/home/ec2-user/jboss-eap-8.0/standalone/deployments/"
+    def warFilePath = "${jbossDeployPath}${warFileName}"
+    def jbossUrl = "http://jboss.sandbox163.opentlc.com:9990/management"
 
     try {
-        // Stage: Copy WAR to Workspace
-        stage('Copy WAR to Workspace') {
-            echo "Copying WAR file to workspace..."
-            sh "cp '${warFilePath}' '${WORKSPACE}/${warFileName}'"
+        stage('Ensure JBoss Deployment Folder Exists') {
+            echo "Checking if JBoss deployment folder exists..."
+            sh """
+                if [ ! -d "${jbossDeployPath}" ]; then
+                    echo "Deployment folder not found! Creating..."
+                    sudo mkdir -p ${jbossDeployPath}
+                    sudo chown -R jenkins:jenkins ${jbossDeployPath}
+                    sudo chmod -R 775 ${jbossDeployPath}
+                else
+                    echo "JBoss deployment folder exists."
+                fi
+            """
         }
 
-        // Stage: Deploy WAR to JBoss
-        stage('Deploy WAR to JBoss') {
-            echo "Deploying WAR file to JBoss..."
-            withCredentials([usernamePassword(credentialsId: 'jboss-credentials', usernameVariable: 'JBOSS_USERNAME', passwordVariable: 'JBOSS_PASSWORD')]) {
-                sh """
-                    echo "Starting Deployment..."
-                    curl --digest -L -D - \
-                         -u ${env.JBOSS_USERNAME}:${env.JBOSS_PASSWORD} \
-                         -H "Content-Type: application/json" \
-                         -d '{
-                               "operation" : "composite",
-                               "address" : [],
-                               "steps" : [
-                                   {"operation" : "add", "address" : {"deployment" : "${warFileName}"}, "content" : [{"url" : "file:${WORKSPACE}/${warFileName}"}]},
-                                   {"operation" : "deploy", "address" : {"deployment" : "${warFileName}"}}
-                               ],
-                               "json.pretty": 1
-                             }' \
-                         ${jbossUrl}
-                    echo "Deployment Response:"
-                """
-            }
+        stage('Copy WAR to JBoss Deployment Folder') {
+            echo "Copying WAR file to JBoss deployments directory..."
+            sh "cp '/home/ubuntu/${warFileName}' '${warFilePath}'"
+            sh "ls -lah ${jbossDeployPath}"
+        }
+
+        stage('Trigger Deployment in JBoss') {
+            echo "Triggering deployment in JBoss..."
+            sh "touch '${warFilePath}.dodeploy'"
         }
 
     } catch (Exception e) {
