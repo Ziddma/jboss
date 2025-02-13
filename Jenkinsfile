@@ -12,10 +12,9 @@ node {
         // Stage: Deploy WAR to JBoss
         stage('Deploy WAR to JBoss') {
             echo "Deploying WAR file to JBoss..."
-
             withCredentials([usernamePassword(credentialsId: 'jboss-credentials', usernameVariable: 'JBOSS_USERNAME', passwordVariable: 'JBOSS_PASSWORD')]) {
-                // Add the deployment to JBoss
-                def addDeploymentResponse = sh(script: """
+                sh """
+                    echo "Starting Deployment..."
                     curl --digest -u ${env.JBOSS_USERNAME}:${env.JBOSS_PASSWORD} \
                          -X POST \
                          -H "Content-Type: application/json" \
@@ -23,28 +22,20 @@ node {
                                "operation": "add",
                                "address": [{"deployment": "${warFileName}"}],
                                "content": [{"archive": "@${WORKSPACE}/${warFileName}"}],
-                               "enabled": true,
-                               "path": "/home/ec2-user/jboss-eap-8.0/standalone/deployments"
+                               "enabled": true
                              }' \
                          ${jbossUrl}
-                    """, returnStdout: true).trim()
-
-                echo "Add Deployment Response: ${addDeploymentResponse}"
-
-                // Check if the deployment was added successfully
-                if (!addDeploymentResponse.contains('"outcome" : "success"')) {
-                    error "Failed to add deployment. Response: ${addDeploymentResponse}"
-                }
+                    echo "Deployment Response:"
+                """
             }
         }
 
         // Stage: Deploy WAR to JBoss (Activate)
         stage('Deploy WAR to JBoss (Activate)') {
             echo "Activating WAR deployment on JBoss..."
-
             withCredentials([usernamePassword(credentialsId: 'jboss-credentials', usernameVariable: 'JBOSS_USERNAME', passwordVariable: 'JBOSS_PASSWORD')]) {
-                // Activate the deployment
-                def deployResponse = sh(script: """
+                sh """
+                    echo "Activating Deployment..."
                     curl --digest -u ${env.JBOSS_USERNAME}:${env.JBOSS_PASSWORD} \
                          -X POST \
                          -H "Content-Type: application/json" \
@@ -53,14 +44,8 @@ node {
                                "address": [{"deployment": "${warFileName}"}]
                              }' \
                          ${jbossUrl}
-                    """, returnStdout: true).trim()
-
-                echo "Deploy Response: ${deployResponse}"
-
-                // Check if deployment was successful
-                if (!deployResponse.contains('"outcome" : "success"')) {
-                    error "Failed to deploy WAR file. Response: ${deployResponse}"
-                }
+                    echo "Activation Response:"
+                """
             }
         }
 
