@@ -24,7 +24,7 @@ node {
                                "address": [{"deployment": "${warFileName}"}],
                                "content": [{"archive": "@${WORKSPACE}/${warFileName}"}],
                                "enabled": true,
-                               "path": "/path/to/deployment/folder"
+                               "path": "/home/ec2-user/jboss-eap-8.0/standalone/deployments"
                              }' \
                          ${jbossUrl}
                     """, returnStdout: true).trim()
