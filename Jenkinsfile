@@ -23,7 +23,8 @@ node {
                                "operation": "add",
                                "address": [{"deployment": "${warFileName}"}],
                                "content": [{"archive": "@${WORKSPACE}/${warFileName}"}],
-                               "enabled": true
+                               "enabled": true,
+                               "path": "/path/to/deployment/folder"
                              }' \
                          ${jbossUrl}
                     """, returnStdout: true).trim()
