@@ -11,7 +11,7 @@ node {
         // Stage: Checkout
         stage('Checkout') {
             git credentialsId: 'daffa-gitlab', 
-                branch: 'master', 
+                branch: 'main', 
                 url: 'https://gitlab.apps.cluster-6m5l5.sandbox1208.opentlc.com/jboss/pipeline.git'
         }
 
