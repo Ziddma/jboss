@@ -45,7 +45,7 @@ node {
                                            "operation": "add",
                                            "address": [{"deployment": "${warFileName}"}],
                                            "content": [
-                                               {"path": "${warFilePath}"}
+                                               {"archive": "${warFilePath}"}
                                            ],
                                            "enabled": true
                                        },
