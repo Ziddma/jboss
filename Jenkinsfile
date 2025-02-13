@@ -1,78 +1,88 @@
 node {
-    // Define environment variables
-    def ARTIFACTORY_SERVER = 'https://artifactory.apps.cluster-6m5l5.sandbox1208.opentlc.com/artifactory'
-    def ARTIFACTORY_REPO = 'jboss-file'
-    def ARTIFACTORY_REPO_URL = 'https://artifactory.apps.cluster-6m5l5.sandbox1208.opentlc.com/artifactory/jboss-file'
-    def WAR_FILE = '/var/lib/jenkins/workspace/test/target/calculator-1.0-SNAPSHOT.war'
-    def PROJECT = 'jboss'
-    def JBOSS_URL = 'http://jboss.6m5l5.sandbox1208.opentlc.com:9990/management'
+    // Environment variables
+    def warFileName = "helloworld.war"
+    def jbossUrl = "http://jboss.sandbox163.opentlc.com:9990/management"
+    def warFilePath = "${WORKSPACE}/${warFileName}"
 
     try {
-        stage('Checkout') {
-            echo "Checking out the repository"
-            git credentialsId: 'daffa-gitlab', branch: 'main', url: 'https://gitlab.apps.cluster-6m5l5.sandbox1208.opentlc.com/jboss/pipeline.git'
-        }
-
-        stage('Prepare') {
-            echo "Preparing Java Spring Boot"
-            sh 'mvn clean install -DskipTests=true'
-
-            // Verify if the WAR file exists
-            if (!fileExists(WAR_FILE)) {
-                error "WAR file not found at: ${WAR_FILE}"
-            }
-
-            echo "WAR file located at: ${WAR_FILE}"
-        }
-
-        stage('SonarQube Analysis') {
-            echo "Running SonarQube Analysis"
-            sh ''' 
-                mvn clean verify sonar:sonar \
-                    -Dsonar.projectKey=jboss \
-                    -Dsonar.host.url=https://sonarqube.apps.cluster-6m5l5.sandbox1208.opentlc.com \
-                    -Dsonar.login=sqp_f848f32de9af6a1a0bd181bb5861e7a8355a07fb
-            '''
-        }
-
-        stage('Push to JFrog Artifactory') {
-            echo "Pushing WAR file to JFrog Artifactory"
-
-            // Extract the WAR file name from the path
-            def WAR_FILE_NAME = sh(script: "basename ${WAR_FILE}", returnStdout: true).trim()
-            echo "Uploading WAR file: ${WAR_FILE_NAME}"
-
-            withCredentials([usernamePassword(credentialsId: 'artifactory', usernameVariable: 'JFROG_USER', passwordVariable: 'JFROG_PASS')]) {
-                sh ''' 
-                    jf rt u "${WAR_FILE}" "${ARTIFACTORY_REPO}/${PROJECT}/${BUILD_NUMBER}/${WAR_FILE_NAME}" --url ${ARTIFACTORY_SERVER} --user ${JFROG_USER} --password ${JFROG_PASS}
-                '''
-            }
-
-            env.WAR_URL = "${ARTIFACTORY_SERVER}/${ARTIFACTORY_REPO}/${PROJECT}/${BUILD_NUMBER}/${WAR_FILE_NAME}"
-            echo "WAR file uploaded to: ${WAR_URL}"
-        }
-
-        stage('Deploy to JBoss') {
-            echo "Deploying WAR file to JBoss"
+        // Stage: Copy WAR to Workspace
+        stage('Copy WAR to Workspace') {
+            echo "Copying WAR file to workspace..."
             
-            // Extract the WAR file name again
-            def WAR_FILE_NAME = sh(script: "basename ${WAR_FILE}", returnStdout: true).trim()
-
-            withCredentials([usernamePassword(credentialsId: 'jboss', usernameVariable: 'JBOSS_USER', passwordVariable: 'JBOSS_PASS')]) {
-                sh '''
-                    curl -u ${JBOSS_USER}:${JBOSS_PASS} \
-                        -X POST ${JBOSS_URL}/deployments \
-                        -d '{"address":["deployment", "${WAR_FILE_NAME}"],"operation":"add","content":[{"archive":"${WAR_FILE}"}]}'
-                '''
+            // Check if the WAR file exists before copying
+            if (fileExists("/home/ubuntu/helloworld.war")) {
+                echo "WAR file exists at /home/ubuntu/helloworld.war. Copying to workspace."
+                sh "cp /home/ubuntu/helloworld.war ${warFilePath}"
+            } else {
+                error "WAR file does not exist at /home/ubuntu/helloworld.war. Aborting pipeline."
             }
 
-            echo "WAR file deployed to JBoss at ${JBOSS_URL}"
+            // Verifying the WAR file exists in the workspace
+            if (!fileExists(warFilePath)) {
+                error "WAR file not found in workspace at: ${warFilePath}. Aborting pipeline."
+            }
+            echo "WAR file successfully copied to workspace: ${warFilePath}"
         }
 
+        // Stage: Deploy WAR to JBoss
+        stage('Deploy WAR to JBoss') {
+            echo "Deploying WAR file to JBoss..."
+            
+            withCredentials([usernamePassword(credentialsId: 'jboss-credentials', usernameVariable: 'JBOSS_USERNAME', passwordVariable: 'JBOSS_PASSWORD')]) {
+                try {
+                    // Debugging curl command
+                    echo "Starting JBoss deployment via curl"
+
+                    def curlCommand = """
+                        curl --digest -u ${JBOSS_USERNAME}:${JBOSS_PASSWORD} \\
+                             -X POST \\
+                             -H "Content-Type: application/json" \\
+                             -d '{
+                                   "operation": "composite",
+                                   "address": [],
+                                   "steps": [
+                                       {
+                                           "operation": "add",
+                                           "address": [{"deployment": "${warFileName}"}],
+                                           "content": [
+                                               {"path": "${warFilePath}"}
+                                           ],
+                                           "enabled": true
+                                       },
+                                       {
+                                           "operation": "deploy",
+                                           "address": [{"deployment": "${warFileName}"}]
+                                       }
+                                   ]
+                                 }' \\
+                             ${jbossUrl}
+                    """
+                    
+                    // Print the curl command for debugging purposes
+                    echo "Executing curl command: ${curlCommand}"
+                    
+                    // Run curl command
+                    def curlResponse = sh(script: curlCommand, returnStdout: true).trim()
+                    
+                    // Output the response for debugging
+                    echo "Curl Response: ${curlResponse}"
+                    
+                    // Check for errors in the curl response
+                    if (curlResponse.contains("error") || curlResponse.contains("failure")) {
+                        error "Failed to deploy WAR to JBoss. Response: ${curlResponse}"
+                    }
+                    
+                    echo "WAR file successfully deployed to JBoss."
+                } catch (Exception e) {
+                    echo "Error occurred during JBoss deployment: ${e.getMessage()}"
+                    throw e  // Re-throw the exception to fail the build
+                }
+            }
+        }
     } catch (Exception e) {
         currentBuild.result = 'FAILURE'
-        throw e
+        throw e  // Ensure the pipeline fails properly
     } finally {
-        echo "Pipeline completed"
+        echo "Pipeline finished"
     }
 }
